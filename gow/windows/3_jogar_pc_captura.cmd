@@ -26,6 +26,9 @@ if not exist "%ROOT%\dados\iop\modules.txt" (
   set "PS2X_IOP_DUMP_MODULES=%ROOT%\dados\iop"
   echo Capturando tambem os modulos do IOP nesta rodada.
 )
+rem A apresentacao direta (textura compartilhada) do branch do Switch deixava a janela preta no Windows; a copia
+rem pela RAM e um pouco mais lenta, mas aqui so importa ver o jogo para capturar. GOW_DIRETO=1 testa a direta.
+if "%GOW_DIRETO%"=="1" (set PS2X_GS_DIRECT_PRESENT=1) else (set PS2X_GS_DIRECT_PRESENT=0)
 set PS2X_GS_WORKER=1
 set GOW_GS_FINISH_ASINCRONO=1
 set GOW_AUDIO_DEVICE=default
