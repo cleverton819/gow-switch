@@ -48,6 +48,21 @@ if (-not (Test-Path -LiteralPath $elf)) {
 }
 if (-not (Test-Path -LiteralPath $elf)) { throw "Nao achei $elf depois da extracao. A ISO e a versao americana (SCUS-97399)?" }
 Write-Host "ELF: $elf"
+# O jogo (modo host) carrega os modulos do IOP como IOP_MOD/<nome>.irx ao lado do ELF, nao da raiz do disco:
+# sem esta copia o driver de som (989nomid) nao carrega e o jogo para na tela inicial esperando por ele.
+$iopMod = Join-Path $Disc 'IOP_MOD'
+New-Item -ItemType Directory -Force -Path $iopMod | Out-Null
+foreach ($irx in Get-ChildItem -LiteralPath $Disc -Filter '*.IRX' -File) {
+    $dest = Join-Path $iopMod $irx.Name
+    if (-not (Test-Path -LiteralPath $dest)) { Copy-Item -LiteralPath $irx.FullName -Destination $dest }
+}
+Write-Host ("IOP_MOD: {0} modulos" -f (Get-ChildItem -LiteralPath $iopMod -Filter '*.IRX' -File).Count)
+foreach ($pak in @('PART1.PAK', 'PART2.PAK')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $Disc $pak))) {
+        Write-Host "AVISO: falta $pak em $Disc. A ISO deve ser o DVD de duas camadas completo (uns 8 GB);"
+        Write-Host "       apague a pasta $Disc e extraia de novo a partir de uma ISO completa."
+    }
+}
 
 Passo 'Configurando o CMake'
 # VU1 compilada: so quando ja existem capturas do passo 3 (sem elas a VU1 roda no interpretador)

@@ -12,6 +12,11 @@ set "EXE="
 for /r "%ROOT%\build-pc" %%f in (ps2EntryRunner.exe) do if exist "%%f" set "EXE=%%f"
 if not defined EXE (echo Versao de PC nao compilada. Rode gow\windows\2_compilar_pc.cmd primeiro. & pause & exit /b 1)
 if not exist "%DISC%\SCUS_973.99" (echo Jogo nao extraido em %DISC%. Rode o passo 2 primeiro. & pause & exit /b 1)
+if not exist "%DISC%\IOP_MOD\989NOMID.IRX" (
+  if not exist "%DISC%\IOP_MOD" mkdir "%DISC%\IOP_MOD"
+  copy /y "%DISC%\*.IRX" "%DISC%\IOP_MOD\" >nul
+)
+if not exist "%DISC%\PART2.PAK" echo AVISO: falta PART2.PAK em %DISC% - o jogo pode travar ao carregar areas da segunda camada do DVD.
 if not exist "%ROOT%\dados\vu1\micro" mkdir "%ROOT%\dados\vu1\micro"
 if not exist "%ROOT%\gow\logs" mkdir "%ROOT%\gow\logs"
 
