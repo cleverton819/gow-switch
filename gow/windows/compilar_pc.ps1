@@ -21,7 +21,7 @@ function Run([string]$exe, [string[]]$a) {
     if ($LASTEXITCODE -ne 0) { throw "Falhou ($LASTEXITCODE): $exe" }
 }
 function Passo([string]$t) { Write-Host ''; Write-Host "==== [$(Get-Date -Format HH:mm:ss)] $t ====" }
-function Fw([string]$p) { return $p -replace '\\', '/' }
+function ParaBarras([string]$p) { return $p -replace '\\', '/' }
 
 # Python: o lancador "py" (instalado com o Python do winget) ou "python"
 $Py = $null; $PyArgs = @()
@@ -57,9 +57,9 @@ if ($microBins.Count -gt 0) {
     Write-Host "VU1: $($microBins.Count) microprogramas capturados em $Micro"
     # o CMake procura a lista de entradas extra em <micro>\..\vu1n_heads.txt
     Copy-Item -LiteralPath (Join-Path $Gow 'tools\vu1\vu1n_heads.txt') -Destination (Join-Path $Dados 'vu1\vu1n_heads.txt') -Force
-    $vu1Micro = Fw $Micro
-    $vu1Gen   = Fw (Join-Path $Gow 'tools\vu1\generar_vu1.cpp')
-    $vu1nGen  = Fw (Join-Path $Gow 'tools\vu1\vu1n_gen.py')
+    $vu1Micro = ParaBarras $Micro
+    $vu1Gen   = ParaBarras (Join-Path $Gow 'tools\vu1\generar_vu1.cpp')
+    $vu1nGen  = ParaBarras (Join-Path $Gow 'tools\vu1\vu1n_gen.py')
 } else {
     Write-Host 'VU1: nenhuma captura ainda (normal na primeira vez; veja o passo 3)'
     $vu1Micro = ''; $vu1Gen = ''; $vu1nGen = ''
@@ -78,10 +78,13 @@ if (Test-Path -LiteralPath $Gerado) { Remove-Item -LiteralPath $Gerado -Recurse 
 New-Item -ItemType Directory -Path $Gerado | Out-Null
 $toml = Join-Path $Dados 'recomp.toml'
 (Get-Content -LiteralPath (Join-Path $Gow 'config\recomp.template.toml') -Raw) `
-    -replace '@ELF@', (Fw $elf) `
-    -replace '@MAP@', (Fw (Join-Path $Gow 'config\funcmap.csv')) `
-    -replace '@OUT@', ((Fw $Gerado) + '/') |
+    -replace '@ELF@', (ParaBarras $elf) `
+    -replace '@MAP@', (ParaBarras (Join-Path $Gow 'config\funcmap.csv')) `
+    -replace '@OUT@', ((ParaBarras $Gerado) + '/') |
     Set-Content -LiteralPath $toml -Encoding ASCII
+if (-not (Select-String -LiteralPath $toml -SimpleMatch ('input = "' + (ParaBarras $elf) + '"') -Quiet)) {
+    throw "O arquivo $toml nao recebeu o caminho do jogo ($elf)"
+}
 $recompExe = Get-ChildItem -LiteralPath $Bld -Recurse -Filter 'ps2_recomp.exe' | Select-Object -First 1
 if (-not $recompExe) { throw 'ps2_recomp.exe nao foi gerado' }
 # o relatorio inteiro vai para o log (antes um erro jogava fora a saida e so sobrava "Failed to initialize")
