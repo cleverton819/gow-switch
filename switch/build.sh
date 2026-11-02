@@ -8,6 +8,7 @@
 #   VU1_PREGEN     host build folder with vu1_generado/ and vu1n_generado/ (default: ../PS2Recomp-kl/out/build-kl/ps2xRuntime)
 #   BOOT_ELF       game ELF on the SD card (default sdmc:/switch/gow/disc-usa/SCUS_973.99)
 #   CLEAN=1        wipe the build folder first
+#   JOBS=<n>       parallel compile jobs (default: all cores; lower it if WSL runs out of memory)
 # Prerequisites: dkp-pacman -S switch-dev switch-sdl2 switch-mesa switch-glad switch-zlib (docs/switch.md).
 # The generated game code (src/runner, ps2xIOP/src/native/iopn_*.cpp) must be present as for the PC build.
 set -euo pipefail
@@ -38,7 +39,7 @@ cmake -S "$REPO_ROOT" -B "$BUILD_DIR" -G Ninja \
 
 TARGET_ARGS=()
 for t in "$@"; do TARGET_ARGS+=(--target "$t"); done
-cmake --build "$BUILD_DIR" -j"$(nproc)" "${TARGET_ARGS[@]}"
+cmake --build "$BUILD_DIR" -j"${JOBS:-$(nproc)}" "${TARGET_ARGS[@]}"
 
 NRO="$(find "$BUILD_DIR" -name '*.nro' -print -quit)"
 [ -n "$NRO" ] && echo "==> $NRO"

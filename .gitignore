@@ -23,3 +23,8 @@ android/app/.cxx/
 android/local.properties
 android/.gradle/ 
 .idea/
+# gow/: the game, captures and builds stay local (game data: never commit)
+/dados/
+/build-pc/
+/sd/
+/gow/logs/
