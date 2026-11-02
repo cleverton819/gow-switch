@@ -569,6 +569,16 @@ struct GSHwBackend::Impl
     // every draw and shuffle into them; clears and uploads replace the target) only collects: the host asks for a
     // frame at every vsync, the game flips a new one every 2-5 of them and draws into the other buffer meanwhile
     uint64_t readbackKey[9] = {};
+    // GOW-Port (Switch): in gameplay the game swaps DISPFB between two frame buffers every field (A, B, A, B, ...)
+    // while it draws ~10 frames a second, so the exact-key check above never matched and every vsync composed and
+    // read back a full frame (~50 a second on the console, `present` ~1.1 s of the GL thread per 5 s, docs/switch.md
+    // v15). A key equal to the one before the last (the other buffer, nothing drawn into either since) only collects
+    // too: the host keeps the picture it has instead of re-composing the same two buffers in turn.
+    // GOW_GS_PRESENT_ALT=0 turns it off (default on for the Switch, off elsewhere).
+    // GOW_GS_PRESENT_MAX_HZ=<n>: at most n full presents a second; the others collect (default 0 = no cap).
+    uint64_t readbackKeyPrev[9] = {};
+    std::chrono::steady_clock::time_point lastFullPresent{};
+    uint64_t skippedAlt = 0, skippedCap = 0;
     uint64_t readPixelsNanos = 0;
     // switch-mesa (nouveau) runs glReadPixels into a pixel pack buffer on the CPU (~16 ms per 640x448 frame on the
     // console), so the composed frame is copied into the buffer by a compute shader instead: plain GPU work behind the
@@ -3328,10 +3338,12 @@ PresentationFrame GSHwBackend::Present(const GSPresentationRequest &request)
             ++(full ? t.full : t.collectOnly);
             if (now - t.last >= std::chrono::seconds(5))
             {
-                std::fprintf(stderr, "[gs-hw-present] full=%llu collect_only=%llu flush_pending_ms=%.1f rest_ms=%.1f readpixels_ms=%.1f\n",
+                std::fprintf(stderr, "[gs-hw-present] full=%llu collect_only=%llu (alt=%llu cap=%llu) flush_pending_ms=%.1f rest_ms=%.1f readpixels_ms=%.1f\n",
                              static_cast<unsigned long long>(t.full), static_cast<unsigned long long>(t.collectOnly),
+                             static_cast<unsigned long long>(d.skippedAlt), static_cast<unsigned long long>(d.skippedCap),
                              t.flushNanos * 1e-6, t.restNanos * 1e-6, d.readPixelsNanos * 1e-6);
                 d.readPixelsNanos = 0u;
+                d.skippedAlt = d.skippedCap = 0u;
                 t = Impl::PresentTiming{};
                 t.last = now;
             }
@@ -3362,7 +3374,34 @@ PresentationFrame GSHwBackend::Present(const GSPresentationRequest &request)
             presentTimer.full = false;
             return d.collectReadback(nullptr);
         }
+#if defined(__SWITCH__)
+        constexpr bool kAltDefault = true;
+#else
+        constexpr bool kAltDefault = false;
+#endif
+        static const bool altSkip = std::getenv("GOW_GS_PRESENT_ALT") ? std::atoi(std::getenv("GOW_GS_PRESENT_ALT")) != 0
+                                                                       : kAltDefault;
+        static const double maxHz = std::getenv("GOW_GS_PRESENT_MAX_HZ") ? std::atof(std::getenv("GOW_GS_PRESENT_MAX_HZ")) : 0.0;
+        const auto now = std::chrono::steady_clock::now();
+        // only once a frame has been composed (the zeroed keys at start-up never count as "the other buffer")
+        const bool composedBefore = d.lastFullPresent != std::chrono::steady_clock::time_point{};
+        if (composedBefore && altSkip && std::memcmp(key, d.readbackKeyPrev, sizeof(key)) == 0)
+        {
+            // keys stay as they are: the next field (the other buffer) matches readbackKey and collects as well
+            presentTimer.full = false;
+            ++d.skippedAlt;
+            return d.collectReadback(nullptr);
+        }
+        if (composedBefore && maxHz > 0.0 && std::chrono::duration<double>(now - d.lastFullPresent).count() < 1.0 / maxHz)
+        {
+            // keys unchanged, so the next present compares again and composes once the interval has passed
+            presentTimer.full = false;
+            ++d.skippedCap;
+            return d.collectReadback(nullptr);
+        }
+        std::memcpy(d.readbackKeyPrev, d.readbackKey, sizeof(key));
         std::memcpy(d.readbackKey, key, sizeof(key));
+        d.lastFullPresent = now;
     }
     const bool enable1 = (request.pmode & 1ull) != 0ull, enable2 = (request.pmode & 2ull) != 0ull;
     const auto decode = [&](bool enabled, uint64_t dispfb, uint64_t display, uint32_t &fbp, uint32_t &fbw, uint32_t &dbx, uint32_t &dby,
