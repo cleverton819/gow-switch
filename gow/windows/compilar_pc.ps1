@@ -84,7 +84,10 @@ $toml = Join-Path $Dados 'recomp.toml'
     Set-Content -LiteralPath $toml -Encoding ASCII
 $recompExe = Get-ChildItem -LiteralPath $Bld -Recurse -Filter 'ps2_recomp.exe' | Select-Object -First 1
 if (-not $recompExe) { throw 'ps2_recomp.exe nao foi gerado' }
-Run $recompExe.FullName @($toml) | Select-Object -Last 5
+# o relatorio inteiro vai para o log (antes um erro jogava fora a saida e so sobrava "Failed to initialize")
+Write-Host ">> $($recompExe.FullName) $toml"
+& $recompExe.FullName $toml
+if ($LASTEXITCODE -ne 0) { throw "O recompilador falhou ($LASTEXITCODE): veja o relatorio acima (secao Events)" }
 Write-Host ("Arquivos gerados: {0}" -f (Get-ChildItem -LiteralPath $Gerado).Count)
 
 Passo 'Copiando o codigo gerado para o runtime'
